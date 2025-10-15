@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TELEGRAMPO - Monitor IoT</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Botão do Menu -->
+    <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+
+    <!-- Overlay da Sidebar -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">Configurações</div>
+            <div class="sidebar-subtitle">TELEGRAMPO</div>
+        </div>
+        
+        <div class="sidebar-menu">
+            <button class="menu-item" onclick="openConfigModal()">
+                <span class="menu-icon">⚙️</span>
+                <span class="menu-text">Configurar Chat ID</span>
+            </button>
+            
+            <button class="menu-item" onclick="openHistoricoModal()">
+                <span class="menu-icon">📊</span>
+                <span class="menu-text">Ver Histórico</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>🌡️ TELEGRAMPO</h1>
+            <div class="last-update" id="lastUpdate">Carregando dados...</div>
+        </div>
+
+        <div class="connection-status" id="connectionStatus">Conectando...</div>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div class="dashboard" id="dashboard">
+            <!-- Card Status da Roupa -->
+            <div class="card">
+                <div class="card-icon" id="statusIcon">👕</div>
+                <div class="card-title">Status da Roupa</div>
+                <div class="card-value" id="statusValue">---</div>
+                <div class="card-unit">Estado atual</div>
+            </div>
+
+            <!-- Card Temperatura -->
+            <div class="card">
+                <div class="card-icon">🌡️</div>
+                <div class="card-title">Temperatura</div>
+                <div class="card-value temperature" id="tempValue">--</div>
+                <div class="card-unit">°C</div>
+            </div>
+
+            <!-- Card Umidade do Ar -->
+            <div class="card">
+                <div class="card-icon">💧</div>
+                <div class="card-title">Umidade do Ar</div>
+                <div class="card-value humidity" id="humidityValue">--</div>
+                <div class="card-unit">%</div>
+            </div>
+
+            <!-- Card Umidade da Roupa -->
+            <div class="card">
+                <div class="card-icon">👔</div>
+                <div class="card-title">Umidade da Roupa</div>
+                <div class="card-value" id="roupaValue">--</div>
+                <div class="card-unit">%</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Configuração Chat ID -->
+    <div class="modal-overlay" id="configModal">
+        <div class="modal">
+            <button class="close-btn" onclick="closeModal('configModal')">×</button>
+            
+            <div class="modal-header">
+                <div class="modal-title">Configurar Telegram</div>
+                <div class="modal-subtitle">Configure seu Chat ID para receber notificações</div>
+            </div>
+
+            <form id="configForm" onsubmit="salvarConfig(event)">
+                <div class="form-group">
+                    <label class="form-label" for="chatId">Chat ID do Telegram</label>
+                    <input type="text" class="form-input" id="chatId" placeholder="Ex: -1003035825266" required>
+                    <small>Para obter seu Chat ID, envie uma mensagem para @userinfobot no Telegram</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="nomeUsuario">Nome</label>
+                    <input type="text" class="form-input" id="nomeUsuario" placeholder="Seu nome" required>
+                </div>
+
+                <div class="form-buttons">
+                    <button type="submit" class="btn btn-primary">💾 Salvar</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('configModal')">✖ Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Histórico -->
+    <div class="modal-overlay" id="historicoModal">
+        <div class="modal">
+            <button class="close-btn" onclick="closeModal('historicoModal')">×</button>
+            
+            <div class="modal-header">
+                <div class="modal-title">Histórico de Leituras</div>
+                <div class="modal-subtitle">Últimas 24 horas</div>
+            </div>
+
+            <div id="historicoContent">
+                <p style="text-align: center; padding: 20px;">Carregando histórico...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
