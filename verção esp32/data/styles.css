@@ -5,12 +5,28 @@
     box-sizing: border-box;
 }
 
+:root {
+    --tg-bg: #17212b;
+    --tg-bg-secondary: #242f3d;
+    --tg-bg-card: #0e1621;
+    --tg-text: #ffffff;
+    --tg-text-secondary: #aaaaaa;
+    --tg-blue: #2AABEE;
+    --tg-blue-dark: #1e88cf;
+    --tg-border: #2b5278;
+    --tg-error: #e53935;
+    --tg-success: #00c853;
+}
+
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: var(--tg-bg);
+    color: var(--tg-text);
     min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 20px;
-    color: #333;
 }
 
 .container {
@@ -152,12 +168,12 @@ body {
 }
 
 .card {
-    background: rgba(255, 255, 255, 0.95);
+    background: rgba(9, 18, 37, 0.95);
     backdrop-filter: blur(10px);
-    border-radius: 15px;
+    border-radius: 0px;
     padding: 25px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(0, 0, 0, 0.2);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -178,7 +194,7 @@ body {
     font-weight: 600;
     margin-bottom: 10px;
     text-align: center;
-    color: #555;
+    color: #ffffff;
 }
 
 .card-value {
