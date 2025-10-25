@@ -1,0 +1,5 @@
+# Proteger arquivos sensíveis
+<FilesMatch "\.(php|sql)$">
+    Order deny,allow
+    Deny from all
+</FilesMatch>
