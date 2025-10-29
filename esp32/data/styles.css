@@ -467,3 +467,159 @@ body {
     background: rgba(255, 255, 255, 0.3);
     transform: scale(1.05);
 }
+
+/* ===== SEÇÃO DE GRÁFICOS ===== */
+.charts-section {
+    margin: 40px 0;
+}
+
+.section-title {
+    color: white;
+    font-size: 1.5rem;
+    margin-bottom: 20px;
+    text-align: center;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+.charts-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.chart-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.chart-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 15px;
+    color: #555;
+    text-align: center;
+}
+
+.chart-card canvas {
+    max-height: 250px;
+}
+
+/* ===== SEÇÃO DE LOGS ===== */
+.logs-section {
+    margin: 40px 0;
+}
+
+.logs-container {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.log-entry {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    font-size: 0.9rem;
+    transition: background 0.2s ease;
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-entry:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.log-time {
+    font-weight: 600;
+    color: #667eea;
+    margin-right: 15px;
+    min-width: 80px;
+    font-family: 'Courier New', monospace;
+}
+
+.log-message {
+    flex: 1;
+    color: #555;
+}
+
+.log-success {
+    border-left: 3px solid #27ae60;
+}
+
+.log-error {
+    border-left: 3px solid #e74c3c;
+}
+
+.log-info {
+    border-left: 3px solid #3498db;
+}
+
+.log-warning {
+    border-left: 3px solid #f39c12;
+}
+
+/* Scrollbar personalizado para logs */
+.logs-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.logs-container::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 10px;
+}
+
+.logs-container::-webkit-scrollbar-thumb {
+    background: rgba(102, 126, 234, 0.5);
+    border-radius: 10px;
+}
+
+.logs-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(102, 126, 234, 0.7);
+}
+
+/* ===== RESPONSIVIDADE PARA GRÁFICOS ===== */
+@media (max-width: 768px) {
+    .chart-card canvas {
+        max-height: 200px;
+    }
+    
+    .logs-container {
+        max-height: 300px;
+    }
+}
+
+@media (max-width: 480px) {
+    .section-title {
+        font-size: 1.2rem;
+    }
+    
+    .chart-card {
+        padding: 15px;
+    }
+    
+    .chart-card canvas {
+        max-height: 180px;
+    }
+    
+    .log-time {
+        min-width: 70px;
+        font-size: 0.8rem;
+    }
+    
+    .log-message {
+        font-size: 0.85rem;
+    }
+}

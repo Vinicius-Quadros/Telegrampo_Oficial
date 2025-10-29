@@ -1,77 +1,230 @@
 // ========================================
-// SCRIPT PARA MODO ACCESS POINT
-// script.js
+// CONFIGURAÇÕES
 // ========================================
-
-// Configurações
 const CONFIG = {
-    LOCAL_API: '/sensor_data',  // API local do ESP32
-    UPDATE_INTERVAL: 2000       // 2 segundos
+    LOCAL_API: '/sensor_data',
+    UPDATE_INTERVAL: 2000,
+    MAX_DATA_POINTS: 20,
+    MAX_LOGS: 50
 };
 
-// Variáveis globais
+// ========================================
+// VARIÁVEIS GLOBAIS
+// ========================================
 let updateTimer = null;
 let isConnected = false;
+
+// Arrays para armazenar dados dos gráficos
+let dataTemperatura = [];
+let dataUmidadeAr = [];
+let dataUmidadeRoupa = [];
+let dataLabels = [];
+
+// Objetos dos gráficos
+let chartTemperatura = null;
+let chartUmidadeAr = null;
+let chartUmidadeRoupa = null;
+
+// Array de logs
+let logs = [];
 
 // ========================================
 // INICIALIZAÇÃO
 // ========================================
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('TELEGRAMPO Access Point - Iniciado!');
+    console.log('TELEGRAMPO - Iniciado!');
     
-    // Esconder elementos que não funcionam no modo AP
-    esconderElementosInativos();
-    
-    // Carregar dados iniciais
+    inicializarGraficos();
     carregarDados();
-    
-    // Iniciar atualização automática
     startAutoUpdate();
+    
+    addLog('Sistema iniciado', 'success');
 });
 
 // ========================================
-// ESCONDER ELEMENTOS INATIVOS
+// FUNÇÕES DE GRÁFICOS
 // ========================================
-function esconderElementosInativos() {
-    // Esconder botão de menu (não tem configurações no modo AP)
-    const menuBtn = document.querySelector('.menu-btn');
-    if (menuBtn) menuBtn.style.display = 'none';
+function inicializarGraficos() {
+    const configGrafico = {
+        type: 'line',
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            animation: {
+                duration: 750
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        maxTicksLimit: 10
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    };
+
+    // Gráfico Temperatura
+    chartTemperatura = new Chart(
+        document.getElementById('chartTemperatura'),
+        {
+            ...configGrafico,
+            data: {
+                labels: dataLabels,
+                datasets: [{
+                    label: 'Temperatura (°C)',
+                    data: dataTemperatura,
+                    borderColor: '#e74c3c',
+                    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            }
+        }
+    );
+
+    // Gráfico Umidade do Ar
+    chartUmidadeAr = new Chart(
+        document.getElementById('chartUmidadeAr'),
+        {
+            ...configGrafico,
+            data: {
+                labels: dataLabels,
+                datasets: [{
+                    label: 'Umidade do Ar (%)',
+                    data: dataUmidadeAr,
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            }
+        }
+    );
+
+    // Gráfico Umidade da Roupa
+    chartUmidadeRoupa = new Chart(
+        document.getElementById('chartUmidadeRoupa'),
+        {
+            ...configGrafico,
+            data: {
+                labels: dataLabels,
+                datasets: [{
+                    label: 'Umidade da Roupa (%)',
+                    data: dataUmidadeRoupa,
+                    borderColor: '#9b59b6',
+                    backgroundColor: 'rgba(155, 89, 182, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            }
+        }
+    );
+
+    addLog('Gráficos inicializados', 'success');
+}
+
+function atualizarGraficos(dados) {
+    const horaAtual = new Date().toLocaleTimeString('pt-BR', { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit' 
+    });
+
+    // Adicionar novos dados
+    dataLabels.push(horaAtual);
+    dataTemperatura.push(parseFloat(dados.temperatura) || 0);
+    dataUmidadeAr.push(parseFloat(dados.umidade_ar) || 0);
+    dataUmidadeRoupa.push(parseInt(dados.umidade_roupa) || 0);
+
+    // Limitar quantidade de pontos
+    if (dataLabels.length > CONFIG.MAX_DATA_POINTS) {
+        dataLabels.shift();
+        dataTemperatura.shift();
+        dataUmidadeAr.shift();
+        dataUmidadeRoupa.shift();
+    }
+
+    // Atualizar gráficos
+    chartTemperatura.update('none');
+    chartUmidadeAr.update('none');
+    chartUmidadeRoupa.update('none');
+}
+
+// ========================================
+// FUNÇÕES DE LOGS
+// ========================================
+function addLog(mensagem, tipo = 'info') {
+    const timestamp = new Date().toLocaleTimeString('pt-BR');
     
-    // Esconder sidebar
-    const sidebar = document.getElementById('sidebar');
-    if (sidebar) sidebar.style.display = 'none';
+    logs.unshift({
+        time: timestamp,
+        message: mensagem,
+        type: tipo
+    });
+
+    // Limitar quantidade de logs
+    if (logs.length > CONFIG.MAX_LOGS) {
+        logs.pop();
+    }
+
+    atualizarLogsUI();
+}
+
+function atualizarLogsUI() {
+    const container = document.getElementById('logsContainer');
     
-    const sidebarOverlay = document.getElementById('sidebarOverlay');
-    if (sidebarOverlay) sidebarOverlay.style.display = 'none';
+    container.innerHTML = logs.map(log => `
+        <div class="log-entry log-${log.type}">
+            <span class="log-time">${log.time}</span>
+            <span class="log-message">${log.message}</span>
+        </div>
+    `).join('');
 }
 
 // ========================================
 // FUNÇÕES DE ATUALIZAÇÃO DE DADOS
 // ========================================
-
 function carregarDados() {
-    console.log('Buscando dados em: ' + CONFIG.LOCAL_API);
-    
     fetch(CONFIG.LOCAL_API)
         .then(response => {
-            console.log('Resposta recebida:', response.status);
+            if (!response.ok) {
+                throw new Error('Erro HTTP: ' + response.status);
+            }
             return response.json();
         })
         .then(data => {
-            console.log('Dados recebidos:', data);
             atualizarInterface(data);
+            atualizarGraficos(data);
             updateConnectionStatus(true);
+            
+            addLog(`Dados recebidos: Temp=${data.temperatura}°C, UmidAr=${data.umidade_ar}%, UmidRoupa=${data.umidade_roupa}%`, 'success');
         })
         .catch(error => {
-            console.error('Erro ao carregar dados:', error);
+            console.error('Erro:', error);
             updateConnectionStatus(false);
+            addLog('Erro ao carregar dados: ' + error.message, 'error');
         });
 }
 
 function atualizarInterface(dados) {
-    console.log('Atualizando interface com:', dados);
-    
-    // Atualizar temperatura
+    // Temperatura
     const tempElement = document.getElementById('tempValue');
     if (tempElement) {
         tempElement.textContent = dados.temperatura !== undefined && dados.temperatura !== null 
@@ -79,7 +232,7 @@ function atualizarInterface(dados) {
             : '--';
     }
     
-    // Atualizar umidade do ar
+    // Umidade do ar
     const humidityElement = document.getElementById('humidityValue');
     if (humidityElement) {
         humidityElement.textContent = dados.umidade_ar !== undefined && dados.umidade_ar !== null 
@@ -87,7 +240,7 @@ function atualizarInterface(dados) {
             : '--';
     }
     
-    // Atualizar umidade da roupa
+    // Umidade da roupa
     const roupaElement = document.getElementById('roupaValue');
     if (roupaElement) {
         roupaElement.textContent = dados.umidade_roupa !== undefined && dados.umidade_roupa !== null 
@@ -95,7 +248,7 @@ function atualizarInterface(dados) {
             : '--';
     }
     
-    // Atualizar status da roupa
+    // Status da roupa
     const statusValue = document.getElementById('statusValue');
     const statusIcon = document.getElementById('statusIcon');
     
@@ -115,7 +268,7 @@ function atualizarInterface(dados) {
         }
     }
     
-    // Atualizar última atualização
+    // Última atualização
     const lastUpdate = document.getElementById('lastUpdate');
     if (lastUpdate) {
         lastUpdate.textContent = 'Última atualização: ' + new Date().toLocaleString('pt-BR');
@@ -131,7 +284,7 @@ function startAutoUpdate() {
         carregarDados();
     }, CONFIG.UPDATE_INTERVAL);
     
-    console.log('Atualização automática iniciada a cada ' + (CONFIG.UPDATE_INTERVAL/1000) + ' segundos');
+    addLog('Atualização automática iniciada', 'info');
 }
 
 function updateConnectionStatus(connected) {
@@ -150,26 +303,32 @@ function updateConnectionStatus(connected) {
 }
 
 // ========================================
-// FUNÇÕES DOS MODAIS (DESABILITADAS)
+// FUNÇÕES DOS MODAIS
 // ========================================
-
 function toggleSidebar() {
-    // Desabilitado no modo AP
-    console.log('Sidebar desabilitada no modo Access Point');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    
+    sidebar.classList.toggle('active');
+    overlay.classList.toggle('active');
 }
 
 function closeSidebar() {
-    // Desabilitado no modo AP
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    
+    sidebar.classList.remove('active');
+    overlay.classList.remove('active');
 }
 
 function openConfigModal() {
-    // Desabilitado no modo AP
-    alert('Configurações não disponíveis no modo Access Point');
+    document.getElementById('configModal').classList.add('active');
+    closeSidebar();
 }
 
 function openHistoricoModal() {
-    // Desabilitado no modo AP
-    alert('Histórico não disponível no modo Access Point');
+    document.getElementById('historicoModal').classList.add('active');
+    closeSidebar();
 }
 
 function closeModal(modalId) {
@@ -179,20 +338,17 @@ function closeModal(modalId) {
     }
 }
 
-// ========================================
-// LIMPAR INTERVALO AO SAIR
-// ========================================
+function salvarConfig(event) {
+    event.preventDefault();
+    addLog('Configuração salva com sucesso', 'success');
+    closeModal('configModal');
+}
 
+// ========================================
+// LIMPEZA
+// ========================================
 window.addEventListener('beforeunload', function() {
     if (updateTimer) {
         clearInterval(updateTimer);
-        console.log('Timer de atualização parado');
     }
 });
-
-// ========================================
-// DEBUG NO CONSOLE
-// ========================================
-
-console.log('Script carregado!');
-console.log('Configuração:', CONFIG);
