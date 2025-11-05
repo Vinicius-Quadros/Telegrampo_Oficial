@@ -245,8 +245,6 @@ void conectarWiFi() {
 // ========================================
 
 void lerSensores() {
-  Serial.println("\n--- Lendo Sensores ---");
-  
   temperatura = dht22.readTemperature();
   umidade_ar = dht22.readHumidity();
   
@@ -254,35 +252,17 @@ void lerSensores() {
     Serial.println("✗ Erro ao ler DHT22");
     temperatura = 0;
     umidade_ar = 0;
-  } else {
-    Serial.print("Temperatura: ");
-    Serial.print(temperatura);
-    Serial.println(" °C");
-    
-    Serial.print("Umidade Ar: ");
-    Serial.print(umidade_ar);
-    Serial.println(" %");
   }
   
   valor_bruto_umidade = analogRead(UMIDADE_PIN);
   umidade_roupa = map(valor_bruto_umidade, 4095, 0, 0, 100);
   umidade_roupa = constrain(umidade_roupa, 0, 100);
   
-  Serial.print("Umidade Roupa: ");
-  Serial.print(umidade_roupa);
-  Serial.print(" % (Bruto: ");
-  Serial.print(valor_bruto_umidade);
-  Serial.println(")");
-  
   if (umidade_roupa < 5) {
     status_roupa = "Seca";
   } else {
     status_roupa = "Umida";
   }
-  
-  Serial.print("Status: ");
-  Serial.println(status_roupa);
-  Serial.println("----------------------");
 }
 
 void atualizarLEDs() {
@@ -311,34 +291,20 @@ void enviarDadosParaAPI() {
   postData += "&valor_bruto=" + String(valor_bruto_umidade);
   postData += "&umidade_percentual=" + String(umidade_roupa);
   
-  Serial.println("\n--- Enviando para API ---");
-  Serial.print("URL: ");
-  Serial.println(API_URL);
-  Serial.print("Dados: ");
-  Serial.println(postData);
-  
   HTTPClient http;
   http.begin(API_URL);
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
   
   int httpCode = http.POST(postData);
   
-  if (httpCode > 0) {
-    Serial.print("✓ HTTP Code: ");
-    Serial.println(httpCode);
-    
-    if (httpCode == 200) {
-      String payload = http.getString();
-      Serial.print("Resposta: ");
-      Serial.println(payload);
-    }
-  } else {
-    Serial.print("✗ Erro: ");
+  // SOMENTE mostrar erros
+  if (httpCode <= 0) {
+    Serial.print("✗ Erro API: ");
     Serial.println(http.errorToString(httpCode));
   }
+  // Não mostrar mais "Dados recebidos" do servidor
   
   http.end();
-  Serial.println("-------------------------");
 }
 
 void verificarNotificacoes() {
@@ -356,9 +322,11 @@ void verificarNotificacoes() {
     String response = http.getString();
     
     if (response.indexOf("\"total\":0") == -1 && response.indexOf("notificacoes") != -1) {
-      Serial.println("\n--- Notificações Pendentes ---");
       processarNotificacoes(response);
     }
+  } else if (httpCode <= 0) {
+    Serial.print("✗ Erro ao verificar notificações: ");
+    Serial.println(http.errorToString(httpCode));
   }
   
   http.end();
@@ -385,18 +353,9 @@ void processarNotificacoes(String jsonResponse) {
   int chatEnd = jsonResponse.indexOf("\"", chatStart);
   String chat_id = jsonResponse.substring(chatStart, chatEnd);
   
-  Serial.print("ID: ");
-  Serial.println(notificacao_id);
-  Serial.print("Mensagem: ");
-  Serial.println(mensagem);
-  Serial.print("Chat ID: ");
-  Serial.println(chat_id);
-  
   if (enviarTelegram(chat_id, mensagem)) {
     marcarNotificacaoEnviada(notificacao_id);
   }
-  
-  Serial.println("-------------------------------");
 }
 
 bool enviarTelegram(String chat_id, String mensagem) {
@@ -452,6 +411,9 @@ void marcarNotificacaoEnviada(String notificacao_id) {
   
   if (httpCode == 200) {
     Serial.println("✓ Notificação marcada como enviada");
+  } else if (httpCode <= 0) {
+    Serial.print("✗ Erro ao marcar notificação: ");
+    Serial.println(http.errorToString(httpCode));
   }
   
   http.end();
@@ -470,6 +432,7 @@ void configurarServidorWeb() {
       file.close();
     } else {
       server.send(404, "text/plain", "index.html não encontrado no LittleFS");
+      Serial.println("✗ index.html não encontrado");
     }
   });
   
@@ -481,6 +444,7 @@ void configurarServidorWeb() {
       file.close();
     } else {
       server.send(404, "text/plain", "styles.css não encontrado");
+      Serial.println("✗ styles.css não encontrado");
     }
   });
   
@@ -492,6 +456,7 @@ void configurarServidorWeb() {
       file.close();
     } else {
       server.send(404, "text/plain", "script.js não encontrado");
+      Serial.println("✗ script.js não encontrado");
     }
   });
   
