@@ -13,6 +13,7 @@ const CONFIG = {
 // ========================================
 let updateTimer = null;
 let isConnected = false;
+let wasDisconnected = false;
 
 // Arrays para armazenar dados dos gráficos
 let dataTemperatura = [];
@@ -212,12 +213,23 @@ function carregarDados() {
         .then(data => {
             atualizarInterface(data);
             atualizarGraficos(data);
-            updateConnectionStatus(true);
             
-            addLog(`Dados recebidos: Temp=${data.temperatura}°C, UmidAr=${data.umidade_ar}%, UmidRoupa=${data.umidade_roupa}%`, 'success');
+            // Se estava desconectado e agora conectou, mostra log
+            if (wasDisconnected) {
+                addLog('Conexão restabelecida com sucesso', 'success');
+                wasDisconnected = false;
+            }
+            
+            updateConnectionStatus(true);
         })
         .catch(error => {
             console.error('Erro:', error);
+            
+            // Marca que estava desconectado
+            if (isConnected) {
+                wasDisconnected = true;
+            }
+            
             updateConnectionStatus(false);
             addLog('Erro ao carregar dados: ' + error.message, 'error');
         });
