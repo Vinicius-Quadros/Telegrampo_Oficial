@@ -21,6 +21,7 @@
 #include <LittleFS.h>
 #include <DHT.h>
 #include <ESPmDNS.h>
+#include <time.h>
 
 // ========================================
 // CONFIGURAÇÕES - ALTERE AQUI!
@@ -91,6 +92,85 @@ unsigned long previousMillisNotificacao = 0;
 const long intervaloLeitura = 5000;
 const long intervaloNotificacao = 10000;
 
+bool ntpConfigurado = false;
+
+// ========================================
+// ESTRUTURA DA ÁRVORE BINÁRIA
+// ========================================
+struct NoTemp {
+  float temperatura;
+  char horario[9];  // HH:MM:SS
+  NoTemp* esquerda;
+  NoTemp* direita;
+};
+
+NoTemp* raiz = NULL;
+float maiorTemp = -999;
+float menorTemp = 999;
+
+// ========================================
+// FUNÇÕES DA ÁRVORE
+// ========================================
+NoTemp* criarNo(float temp) {
+  NoTemp* novo = (NoTemp*)malloc(sizeof(NoTemp));
+  novo->temperatura = temp;
+  
+  // Pegar horário atual
+  time_t now = time(nullptr);
+  struct tm* timeinfo = localtime(&now);
+  sprintf(novo->horario, "%02d:%02d:%02d", 
+          timeinfo->tm_hour, 
+          timeinfo->tm_min, 
+          timeinfo->tm_sec);
+  
+  novo->esquerda = NULL;
+  novo->direita = NULL;
+  return novo;
+}
+
+NoTemp* inserir(NoTemp* no, float temp) {
+  if (no == NULL) {
+    return criarNo(temp);
+  }
+  
+  if (temp < no->temperatura) {
+    no->esquerda = inserir(no->esquerda, temp);
+  } else {
+    no->direita = inserir(no->direita, temp);
+  }
+  
+  return no;
+}
+
+void atualizarExtremos(NoTemp* no) {
+  if (no == NULL) return;
+  
+  if (no->temperatura > maiorTemp) {
+    maiorTemp = no->temperatura;
+  }
+  if (no->temperatura < menorTemp) {
+    menorTemp = no->temperatura;
+  }
+  
+  atualizarExtremos(no->esquerda);
+  atualizarExtremos(no->direita);
+}
+
+void registrarTemperatura(float temp) {
+  if (!isnan(temp) && temp > -50 && temp < 100) {
+    raiz = inserir(raiz, temp);
+    atualizarExtremos(raiz);
+    
+    Serial.print("✓ Temp registrada: ");
+    Serial.print(temp);
+    Serial.print("°C | Maior: ");
+    Serial.print(maiorTemp);
+    Serial.print("°C | Menor: ");
+    Serial.print(menorTemp);
+    Serial.println("°C");
+  }
+}
+
 // ========================================
 // FUNÇÕES DE CONFIGURAÇÃO
 // ========================================
@@ -157,6 +237,27 @@ void setup() {
   carregarConfig();
   conectarWiFi();
   
+  // Configurar hora (NTP)
+  configTime(-3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
+  Serial.println("✓ NTP configurado, aguardando sincronização...");
+  
+  // Aguardar sincronização do NTP
+  int tentativas = 0;
+  while (!time(nullptr) && tentativas < 10) {
+    delay(1000);
+    Serial.print(".");
+    tentativas++;
+  }
+  
+  if (time(nullptr)) {
+    ntpConfigurado = true;
+    time_t now = time(nullptr);
+    Serial.println("\n✓ NTP sincronizado!");
+    Serial.println(ctime(&now));
+  } else {
+    Serial.println("\n⚠ NTP não sincronizou, usando horário local");
+  }
+  
   if (MDNS.begin(MDNS_NAME)) {
     Serial.println("✓ mDNS iniciado");
     Serial.print("Acesse via: http://");
@@ -207,41 +308,35 @@ void conectarWiFi() {
   Serial.println("Configurando IP estático...");
   
   IPAddress localIP(config.ip[0], config.ip[1], config.ip[2], config.ip[3]);
-  IPAddress gw(config.gateway[0], config.gateway[1], config.gateway[2], config.gateway[3]);
-  IPAddress subnet(255, 255, 255, 0);
-  IPAddress primaryDNS(8, 8, 8, 8);
+  IPAddress gatewayIP(config.gateway[0], config.gateway[1], config.gateway[2], config.gateway[3]);
   
-  if (!WiFi.config(localIP, gw, subnet, primaryDNS)) {
+  if (!WiFi.config(localIP, gatewayIP, subnet, primaryDNS)) {
     Serial.println("✗ Falha ao configurar IP estático");
   }
-    
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(config.wifi_ssid, config.wifi_password);
   
-  Serial.print("Conectando ao WiFi ");
+  Serial.print("Conectando ao WiFi: ");
   Serial.println(config.wifi_ssid);
   
+  WiFi.begin(config.wifi_ssid, config.wifi_password);
+  
   int tentativas = 0;
-  while (WiFi.status() != WL_CONNECTED && tentativas < 30) {
+  while (WiFi.status() != WL_CONNECTED && tentativas < 20) {
     delay(500);
     Serial.print(".");
     tentativas++;
   }
   
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n--------------------------------------------------");
-    Serial.print("✓ Conectado a: ");
-    Serial.println(config.wifi_ssid);
+    Serial.println("\n✓ WiFi conectado!");
     Serial.print("IP: ");
     Serial.println(WiFi.localIP());
-    Serial.println("--------------------------------------------------");
   } else {
-    Serial.println("\n✗ Falha ao conectar WiFi");
+    Serial.println("\n✗ Falha na conexão WiFi");
   }
 }
 
 // ========================================
-// FUNÇÕES DE LEITURA DE SENSORES
+// FUNÇÕES DOS SENSORES
 // ========================================
 
 void lerSensores() {
@@ -255,28 +350,45 @@ void lerSensores() {
   }
   
   valor_bruto_umidade = analogRead(UMIDADE_PIN);
-  umidade_roupa = map(valor_bruto_umidade, 4095, 0, 0, 100);
-  umidade_roupa = constrain(umidade_roupa, 0, 100);
+  umidade_roupa = map(constrain(valor_bruto_umidade, 1500, 4095), 1500, 4095, 100, 0);
   
-  if (umidade_roupa < 5) {
+  if (umidade_roupa < 30) {
     status_roupa = "Seca";
+  } else if (umidade_roupa >= 30 && umidade_roupa < 60) {
+    status_roupa = "Secando";
   } else {
-    status_roupa = "Umida";
+    status_roupa = "Úmida";
   }
+  
+  // Registrar temperatura na árvore binária
+  registrarTemperatura(temperatura);
+  
+  Serial.println("─────────────────────────────");
+  Serial.print("🌡️  Temp: ");
+  Serial.print(temperatura);
+  Serial.print("°C | 💧 Umidade Ar: ");
+  Serial.print(umidade_ar);
+  Serial.println("%");
+  Serial.print("👕 Umidade Roupa: ");
+  Serial.print(umidade_roupa);
+  Serial.print("% (");
+  Serial.print(valor_bruto_umidade);
+  Serial.print(") | Status: ");
+  Serial.println(status_roupa);
 }
 
 void atualizarLEDs() {
-  if (umidade_roupa < 40) {
-    digitalWrite(LED_AZUL, LOW);
+  if (status_roupa == "Seca") {
     digitalWrite(LED_VERMELHO, HIGH);
+    digitalWrite(LED_AZUL, LOW);
   } else {
-    digitalWrite(LED_AZUL, HIGH);
     digitalWrite(LED_VERMELHO, LOW);
+    digitalWrite(LED_AZUL, HIGH);
   }
 }
 
 // ========================================
-// FUNÇÕES DE COMUNICAÇÃO COM API
+// FUNÇÕES DE API
 // ========================================
 
 void enviarDadosParaAPI() {
@@ -285,13 +397,14 @@ void enviarDadosParaAPI() {
     return;
   }
   
+  HTTPClient http;
   String postData = "device_id=" + String(DEVICE_ID);
   postData += "&temperatura=" + String(temperatura);
   postData += "&umidade_ar=" + String(umidade_ar);
+  postData += "&umidade_roupa=" + String(umidade_roupa);
   postData += "&valor_bruto=" + String(valor_bruto_umidade);
-  postData += "&umidade_percentual=" + String(umidade_roupa);
+  postData += "&status_roupa=" + status_roupa;
   
-  HTTPClient http;
   http.begin(API_URL);
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
   
@@ -302,7 +415,6 @@ void enviarDadosParaAPI() {
     Serial.print("✗ Erro API: ");
     Serial.println(http.errorToString(httpCode));
   }
-  // Não mostrar mais "Dados recebidos" do servidor
   
   http.end();
 }
@@ -463,11 +575,13 @@ void configurarServidorWeb() {
   // API local - dados dos sensores (JSON)
   server.on("/sensor_data", []() {
     String json = "{";
-    json += "\"temperatura\":" + String(temperatura) + ",";
-    json += "\"umidade_ar\":" + String(umidade_ar) + ",";
+    json += "\"temperatura\":" + String(temperatura, 1) + ",";
+    json += "\"umidade_ar\":" + String(umidade_ar, 1) + ",";
     json += "\"umidade_roupa\":" + String(umidade_roupa) + ",";
     json += "\"status_roupa\":\"" + status_roupa + "\",";
-    json += "\"valor_bruto\":" + String(valor_bruto_umidade);
+    json += "\"valor_bruto\":" + String(valor_bruto_umidade) + ",";
+    json += "\"maior_temp\":" + String(maiorTemp, 1) + ",";
+    json += "\"menor_temp\":" + String(menorTemp, 1);
     json += "}";
     
     server.send(200, "application/json", json);

@@ -280,6 +280,18 @@ function atualizarInterface(dados) {
         }
     }
     
+    // Atualizar maior/menor temperatura
+    const maiorTempElement = document.getElementById('maiorTemp');
+    const menorTempElement = document.getElementById('menorTemp');
+    
+    if (maiorTempElement && dados.maior_temp !== undefined && dados.maior_temp > -999) {
+        maiorTempElement.textContent = parseFloat(dados.maior_temp).toFixed(1);
+    }
+    
+    if (menorTempElement && dados.menor_temp !== undefined && dados.menor_temp < 999) {
+        menorTempElement.textContent = parseFloat(dados.menor_temp).toFixed(1);
+    }
+    
     // Última atualização
     const lastUpdate = document.getElementById('lastUpdate');
     if (lastUpdate) {
