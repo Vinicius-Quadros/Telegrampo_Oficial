@@ -32,8 +32,8 @@ const char* WIFI_SSID = "LUCAS";
 const char* WIFI_PASSWORD = "lucasar25";
 
 // IP Estático (ajuste conforme sua rede)
-IPAddress local_IP(10,11,111,140);
-IPAddress gateway(10,11,111,192);
+IPAddress local_IP(10,167,10,140);
+IPAddress gateway(10,167,10,9);
 IPAddress subnet(255, 255, 255, 0);
 IPAddress primaryDNS(8, 8, 8, 8);
 
@@ -42,22 +42,25 @@ const char* DEVICE_ID = "ESP32_001";
 const char* MDNS_NAME = "telegrampo"; 
 
 // Servidor API PHP
-String API_URL = "http://10.11.111.137/telegrampo/api/salvar_leituras.php";
-String API_NOTIFICACOES = "http://10.11.111.137/telegrampo/api/obter_notificacoes.php";
-String API_MARCAR_ENVIADA = "http://10.11.111.137/telegrampo/api/marcar_notificacao_enviada.php";
+String API_URL = "http://10.167.10.137/telegrampo/api/salvar_leituras.php";
+String API_NOTIFICACOES = "http://10.167.10.137/telegrampo/api/obter_notificacoes.php";
+String API_MARCAR_ENVIADA = "http://10.167.10.137/telegrampo/api/marcar_notificacao_enviada.php";
 
 // Token do Bot Telegram
 const char* TELEGRAM_BOT_TOKEN = "8238331019:AAG1gn4RQq9t7rK9LwWkFleuRXZyzTbw4hI";
+
+// CHAT ID do Telegram (ALTERE PARA O SEU!)
+const char* TELEGRAM_CHAT_ID = "-1003035825266";
 
 // Estrutura para armazenar configurações
 struct Config {
   char wifi_ssid[32] = "LUCAS";
   char wifi_password[64] = "lucasar25";
-  uint8_t ip[4] = {10,11,111,140};
-  uint8_t gateway[4] = {10,11,111,192};
-  char api_url[128] = "http://10.11.111.137/telegrampo/api/salvar_leituras.php";
-  char api_notificacoes[128] = "http://10.11.111.137/telegrampo/api/obter_notificacoes.php";
-  char api_marcar_enviada[128] = "http://10.11.111.137/telegrampo/api/marcar_notificacao_enviada.php";
+  uint8_t ip[4] = {10,167,10,140};
+  uint8_t gateway[4] = {10,167,10,9};
+  char api_url[128] = "http://10.167.10.137/telegrampo/api/salvar_leituras.php";
+  char api_notificacoes[128] = "http://10.167.10.137/telegrampo/api/obter_notificacoes.php";
+  char api_marcar_enviada[128] = "http://10.167.10.137/telegrampo/api/marcar_notificacao_enviada.php";
 };
 
 Config config;
@@ -93,6 +96,9 @@ const long intervaloLeitura = 5000;
 const long intervaloNotificacao = 10000;
 
 bool ntpConfigurado = false;
+
+// NOVA VARIÁVEL: Controle de estado da roupa
+bool roupaEstavaUmida = false;
 
 // ========================================
 // ESTRUTURA DA ÁRVORE BINÁRIA
@@ -285,37 +291,30 @@ void loop() {
   
   unsigned long currentMillis = millis();
   
+  // Leitura dos sensores a cada 5 segundos
   if (currentMillis - previousMillisLeitura >= intervaloLeitura) {
     previousMillisLeitura = currentMillis;
-    
     lerSensores();
-    atualizarLEDs();
-    enviarDadosParaAPI();
+    enviarDadosAPI();
   }
   
+  // Verificar notificações a cada 10 segundos
   if (currentMillis - previousMillisNotificacao >= intervaloNotificacao) {
     previousMillisNotificacao = currentMillis;
-    
     verificarNotificacoes();
   }
 }
 
 // ========================================
-// FUNÇÕES DE WIFI
+// CONECTAR WIFI
 // ========================================
 
 void conectarWiFi() {
-  Serial.println("Configurando IP estático...");
+  Serial.print("Conectando WiFi");
   
-  IPAddress localIP(config.ip[0], config.ip[1], config.ip[2], config.ip[3]);
-  IPAddress gatewayIP(config.gateway[0], config.gateway[1], config.gateway[2], config.gateway[3]);
-  
-  if (!WiFi.config(localIP, gatewayIP, subnet, primaryDNS)) {
+  if (!WiFi.config(local_IP, gateway, subnet, primaryDNS)) {
     Serial.println("✗ Falha ao configurar IP estático");
   }
-  
-  Serial.print("Conectando ao WiFi: ");
-  Serial.println(config.wifi_ssid);
   
   WiFi.begin(config.wifi_ssid, config.wifi_password);
   
@@ -330,80 +329,84 @@ void conectarWiFi() {
     Serial.println("\n✓ WiFi conectado!");
     Serial.print("IP: ");
     Serial.println(WiFi.localIP());
+    Serial.print("Gateway: ");
+    Serial.println(WiFi.gatewayIP());
   } else {
-    Serial.println("\n✗ Falha na conexão WiFi");
+    Serial.println("\n✗ Falha ao conectar WiFi");
   }
 }
 
 // ========================================
-// FUNÇÕES DOS SENSORES
+// LER SENSORES
 // ========================================
 
 void lerSensores() {
   temperatura = dht22.readTemperature();
   umidade_ar = dht22.readHumidity();
   
-  if (isnan(temperatura) || isnan(umidade_ar)) {
-    Serial.println("✗ Erro ao ler DHT22");
-    temperatura = 0;
-    umidade_ar = 0;
+  if (!isnan(temperatura) && !isnan(umidade_ar)) {
+    registrarTemperatura(temperatura);
   }
   
   valor_bruto_umidade = analogRead(UMIDADE_PIN);
-  umidade_roupa = map(constrain(valor_bruto_umidade, 1500, 4095), 1500, 4095, 100, 0);
+  umidade_roupa = map(valor_bruto_umidade, 4095, 0, 0, 100);
+  umidade_roupa = constrain(umidade_roupa, 0, 100);
   
-  if (umidade_roupa < 30) {
+  // MODIFICADO: Nova lógica de detecção e notificação
+  if (umidade_roupa <= 30) {
     status_roupa = "Seca";
-  } else if (umidade_roupa >= 30 && umidade_roupa < 60) {
-    status_roupa = "Secando";
-  } else {
+    digitalWrite(LED_AZUL, LOW);
+    digitalWrite(LED_VERMELHO, HIGH);
+    
+    // NOVA LÓGICA: Enviar notificação quando secar
+    if (roupaEstavaUmida) {
+      String mensagem = "🎉 Sua roupa está SECA!\n";
+      mensagem += "Temperatura: " + String(temperatura, 1) + "°C\n";
+      mensagem += "Umidade do ar: " + String(umidade_ar, 1) + "%";
+      
+      Serial.println("⚠ ROUPA SECOU! Enviando notificação...");
+      enviarTelegram(TELEGRAM_CHAT_ID, mensagem);
+      roupaEstavaUmida = false;
+    }
+  } else if (umidade_roupa > 30 && umidade_roupa <= 60) {
     status_roupa = "Úmida";
+    digitalWrite(LED_AZUL, HIGH);
+    digitalWrite(LED_VERMELHO, LOW);
+    roupaEstavaUmida = true;
+  } else {
+    status_roupa = "Molhada";
+    digitalWrite(LED_AZUL, HIGH);
+    digitalWrite(LED_VERMELHO, LOW);
+    roupaEstavaUmida = true;
   }
   
-  // Registrar temperatura na árvore binária
-  registrarTemperatura(temperatura);
-  
-  Serial.println("─────────────────────────────");
-  Serial.print("🌡️  Temp: ");
+  Serial.print("Temp: ");
   Serial.print(temperatura);
-  Serial.print("°C | 💧 Umidade Ar: ");
+  Serial.print("°C | Umidade Ar: ");
   Serial.print(umidade_ar);
-  Serial.println("%");
-  Serial.print("👕 Umidade Roupa: ");
+  Serial.print("% | Roupa: ");
   Serial.print(umidade_roupa);
   Serial.print("% (");
-  Serial.print(valor_bruto_umidade);
-  Serial.print(") | Status: ");
-  Serial.println(status_roupa);
-}
-
-void atualizarLEDs() {
-  if (status_roupa == "Seca") {
-    digitalWrite(LED_VERMELHO, HIGH);
-    digitalWrite(LED_AZUL, LOW);
-  } else {
-    digitalWrite(LED_VERMELHO, LOW);
-    digitalWrite(LED_AZUL, HIGH);
-  }
+  Serial.print(status_roupa);
+  Serial.println(")");
 }
 
 // ========================================
-// FUNÇÕES DE API
+// ENVIAR DADOS PARA API PHP
 // ========================================
 
-void enviarDadosParaAPI() {
+void enviarDadosAPI() {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("✗ WiFi desconectado");
     return;
   }
   
   HTTPClient http;
   String postData = "device_id=" + String(DEVICE_ID);
-  postData += "&temperatura=" + String(temperatura);
-  postData += "&umidade_ar=" + String(umidade_ar);
+  postData += "&temperatura=" + String(temperatura, 1);
+  postData += "&umidade_ar=" + String(umidade_ar, 1);
   postData += "&umidade_roupa=" + String(umidade_roupa);
-  postData += "&valor_bruto=" + String(valor_bruto_umidade);
   postData += "&status_roupa=" + status_roupa;
+  postData += "&valor_bruto=" + String(valor_bruto_umidade);
   
   http.begin(API_URL);
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
